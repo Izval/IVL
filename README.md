@@ -2,6 +2,19 @@
 
 > *Not every range is worth your liquidity. IVL tells you which ones are.*
 
+[![IVL — Internal Variance of Lateralization](https://zvlint.com/ventures/ivl-og.jpg)](https://zvlint.com/ventures/ivl)
+
+📄 **[Read the full research note → zvlint.com/ventures/ivl](https://zvlint.com/ventures/ivl)** — interactive write-up with figures, the method, and real-data results.
+
+**What if an AI agent could tell you not just *that* a market is ranging — but whether that range is
+worth your capital?** When you provide liquidity on PancakeSwap v3 you pick a price range — inside it
+you earn fees, outside it you stop and take losses. Today people choose that range by eye. RSI, MACD
+and ATR describe momentum, trend and volatility; none tell you whether a sideways range is actually a
+good place to put liquidity. **IVL measures exactly that — the internal quality of a range — as one
+0–100 score across timeframes.** It's not an app; it's an open Skill an AI agent can call, and it
+returns a clear decision (concentrate / hold / withdraw) plus a backtestable spec. *Two ranges can
+have the same width and opposite risk — IVL tells an agent which one to trust.*
+
 **A metric designed to quantify the quality of a lateral market structure through the analysis of
 internal dispersion, temporal persistence, and multiscale consistency.** It is delivered as an
 AI-agent skill that decides where to provide concentrated liquidity and when to withdraw.
@@ -130,15 +143,25 @@ lateral blocks). This signal layer maps directly onto CoinMarketCap's technical-
 ## 8. Empirical evaluation
 
 We evaluate with a realistic set-and-hold LP model (objective: fees − impermanent loss − rebalance
-cost) over historical data, comparing IVL-guided range placement against (i) a naive fixed-width band
-that re-centers on exit and (ii) randomized ranges. Findings, under the stated cost and IL assumptions:
+cost) over a 365-day walk-forward, comparing IVL-guided range placement against (i) a naive
+fixed-width band that re-centers on exit and (ii) randomized ranges. Real engine output
+(`compare.mjs --scale 1d --history 365`, normalized fee/IL units):
 
-- Impermanent-loss exposure reduced by about 60–96% relative to naive/random selection.
-- About 5× fewer rebalances, consistent with real LP behavior.
-- Net return turned positive (from negative) in trending regimes.
+| Pair | IVL net | Naive net | IL reduced vs naive | Rebalances (IVL → Naive) |
+|---|---:|---:|---:|---:|
+| ETH/BNB   | **+65.71** | −34.36 | −64% | 10 → 15 |
+| BNB/USDT  | **+13.99** | −61.13 | −55% | 13 → 27 |
+| CAKE/WBNB | **+8.92**  | −68.09 | −53% |  7 → 27 |
+| AAVE/WBNB | −7.45      | −56.77 | −62% |  7 → 35 |
+
+- Impermanent-loss exposure reduced **~53–64%** relative to naive/random selection.
+- **~2–5× fewer rebalances**, consistent with set-and-hold LP behavior.
+- IVL turns the naive **loss into a net gain on 3 of 4 pairs**; on the hardest trending pair
+  (AAVE/WBNB) all strategies lose, but IVL cuts the bleed **~87%** (−57 → −7.5) by not chasing price.
 - A deterministic self-test (`scripts/selftest.mjs`, 6/6) verifies polarity and the fractal penalty.
 
-These are backtest results under explicit assumptions, not production-validated returns.
+These are backtest results under explicit assumptions (normalized fee/IL units, not a tick-level pool
+simulation), not production-validated returns.
 
 ## 9. Related work
 
