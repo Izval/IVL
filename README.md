@@ -6,6 +6,8 @@
 
 📄 **[Read the full research note → zvlint.com/ventures/ivl](https://zvlint.com/ventures/ivl)** — interactive write-up with figures, the method, and real-data results.
 
+▶ **[Try it live → zvlint.com/ventures/ivl](https://zvlint.com/ventures/ivl)** — score any pair from the browser, or call the hosted API: [`api.zvlint.com/v1/ivl?pair=BNB-USDT`](https://api.zvlint.com/v1/ivl?pair=BNB-USDT). The skill isn't just a spec — it runs (see [Hosted API](#hosted-api--open-infrastructure)).
+
 **What if an AI agent could tell you not just *that* a market is ranging — but whether that range is
 worth your capital?** When you provide liquidity on PancakeSwap v3 you pick a price range — inside it
 you earn fees, outside it you stop and take losses. Today people choose that range by eye. RSI, MACD
@@ -191,12 +193,33 @@ node compare.mjs --pair AAVE-WBNB --scale 1d                  # IVL vs naive vs 
 
 The agent skill (`SKILL.md`) adds the live CMC signal layer when the CMC MCP is registered.
 
+## Hosted API & open infrastructure
+
+The skill is not just a spec on paper — it runs. A small open-source Cloudflare Worker (`server/`,
+Apache-2.0) serves IVL as a public, low-latency API, and the research note doubles as an interactive
+demo. This is the same engine as the CLI, exposed over HTTP so an agent — or a judge — can call it now.
+
+| Endpoint | Returns |
+|---|---|
+| [`/v1/ivl?pair=BNB-USDT`](https://api.zvlint.com/v1/ivl?pair=BNB-USDT) | Full IVL score, components, LP band, decision, and deployable ticks |
+| [`/v1/ivl/ticks?pair=BNB-USDT`](https://api.zvlint.com/v1/ivl/ticks?pair=BNB-USDT) | PancakeSwap v3 `tickLower` / `tickUpper` ready to mint |
+| [`/v1/screener`](https://api.zvlint.com/v1/screener) | BNB-ecosystem pools ranked by IVL (refreshed every 4h) |
+| [`/v1/health`](https://api.zvlint.com/v1/health) | Liveness |
+
+Base URL: `https://api.zvlint.com`. CORS is open (read-only public market data). The server code and
+self-host instructions live in [`server/`](server/).
+
+> **Note on candles.** The skill and CLI use **Binance** public klines (as documented in §7). The
+> *hosted* API runs on Cloudflare's edge, where Binance geoblocks datacenter IPs (HTTP 451), so it
+> sources the same klines from **MEXC** (a Binance-compatible API). Same data, deployment detail only.
+
 ## Repository layout
 
 ```
 SKILL.md      agent skill (frontmatter, workflow, allowed-tools mcp__cmc-mcp__*)
 references/   ivl-math.md, decision-matrix.md, backtest-spec.md
 scripts/      engine and CLIs (ivl, profile, compare, backtest, selftest, ...)
+server/       open-source Cloudflare Worker behind the hosted API (api.zvlint.com)
 docs/         ivl/ (metric deep-dive)
 ```
 

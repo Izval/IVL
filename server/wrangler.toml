@@ -1,0 +1,30 @@
+# IVL public API — Cloudflare Worker (Apache-2.0). Self-host de la API IVL.
+# El despliegue de referencia corre en api.zvlint.com. Para hospedar el tuyo:
+#   1) npx wrangler kv namespace create IVL_KV           -> pega el id abajo
+#      npx wrangler kv namespace create IVL_KV --preview -> pega el preview_id abajo
+#   2) (opcional) configura tu propio custom domain o usa la URL *.workers.dev
+#   3) npx wrangler deploy
+# Auth: exporta CLOUDFLARE_API_TOKEN (y CLOUDFLARE_ACCOUNT_ID) — nunca los comitees.
+name = "ivl-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+# Quita esta línea si prefieres exponer la URL *.workers.dev.
+workers_dev = false
+
+[[kv_namespaces]]
+binding = "IVL_KV"
+id = "REPLACE_WITH_YOUR_KV_ID"
+preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"
+
+# Recalcula el screener cada 4h.
+[triggers]
+crons = ["0 */4 * * *"]
+
+# Tu dominio (requiere que la zona esté en tu cuenta de Cloudflare). O usa workers.dev.
+# [[routes]]
+# pattern = "api.tu-dominio.com"
+# custom_domain = true
+
+# API pública de datos read-only sin auth: CORS abierto para demo/widget/agentes.
+[vars]
+ALLOWED_ORIGIN = "*"

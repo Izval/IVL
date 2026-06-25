@@ -31,6 +31,9 @@ allowed-tools:
 
 # IVL: Internal Variance of Lateralization (LP quality for PancakeSwap v3)
 
+> Live demo + hosted API: **zvlint.com/ventures/ivl** · **api.zvlint.com/v1/ivl?pair=BNB-USDT**
+> (the same engine, running — open-source Worker in [`server/`](server/)).
+
 You evaluate whether a sideways price range is a high-quality zone for **concentrated liquidity
 provision** and produce a **deterministic, backtestable strategy spec**. The core metric is
 **IVL**, which is intrinsically **fractal** (multi-scale), there is no separate "F-IVL".
