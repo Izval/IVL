@@ -1,0 +1,11 @@
+# Never send secrets or local junk into the build context (defense in depth on
+# top of .gitignore — the keystore is injected at runtime, not baked into the image).
+**/.studio/
+**/.env.local
+**/.venv/
+**/.venv-*/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+.git
+**/.DS_Store

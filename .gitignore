@@ -6,3 +6,17 @@ node_modules/
 
 # Internal docs (not for public repo)
 docs-int/
+
+# --- agent/ (BNBAgent SDK A2A seller) — NEVER commit secrets or local envs ---
+# The encrypted keystore + unlock password + LLM keys live under .studio/ and are
+# injected at deploy time (Render secret file / env), never versioned. Defense in
+# depth on top of agent/**/.gitignore, because this is a PUBLIC repo.
+.studio/
+**/.studio/
+agent/**/.env.local
+# Python build/runtime junk from the agent subtree.
+.venv/
+.venv-*/
+__pycache__/
+*.py[cod]
+*.egg-info/

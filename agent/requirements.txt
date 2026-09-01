@@ -1,0 +1,6 @@
+# Agente IVL Rebalancer — dependencias directas.
+# Instalación completa (resuelve web3, eth-account, mcp, boto3, fastapi, …):
+#   python3.12 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+# Para reproducir el árbol exacto verificado (17-ago-2026), usar requirements.lock.txt.
+bnbagent-studio==0.0.5
