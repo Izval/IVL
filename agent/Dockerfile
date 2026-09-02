@@ -17,10 +17,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Exact locked dependency tree (reproducible). bnbagent-studio pulls bnbagent,
-# bnbagent-studio-core, web3, uvicorn, a2a-sdk, google-adk, bedrock-agentcore, …
-COPY requirements.lock.txt ./
-RUN pip install --no-cache-dir -r requirements.lock.txt
+# Runtime deps. bnbagent-studio pulls bnbagent-studio-core + bnbagent + web3 +
+# httpx + boto3 + uvicorn; the A2A SERVER stack (google-adk, litellm,
+# bedrock-agentcore[a2a], a2a-sdk, aws-opentelemetry-distro) is declared in the
+# agent's pyproject and is NOT a bnbagent-studio dependency — install it here.
+# (requirements.lock.txt is intentionally NOT used: it omits the server stack.)
+RUN pip install --no-cache-dir \
+    "bnbagent-studio==0.0.5" \
+    "google-adk>=1.34" \
+    "litellm>=1.89,<2" \
+    "bedrock-agentcore[a2a]>=1.9,<2.0" \
+    "a2a-sdk>=0.3,<1.0" \
+    "aws-opentelemetry-distro>=0.10.0"
 
 # Agent code only (no .studio/, no keystore — enforced by .gitignore + .dockerignore).
 COPY ivlrebalancer/ ./ivlrebalancer/
