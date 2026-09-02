@@ -24,5 +24,14 @@ else
 fi
 
 export AGENT_PORT="${PORT:-9000}"
-echo "entrypoint: starting A2A server on 0.0.0.0:$AGENT_PORT"
+
+# The agent card advertises AGENTCORE_RUNTIME_URL as its public `url`. On Render,
+# RENDER_EXTERNAL_URL is the service's public https URL — use it so the card
+# self-describes correctly (otherwise it would announce localhost). Respect an
+# explicit AGENTCORE_RUNTIME_URL if one is already set.
+if [ -z "$AGENTCORE_RUNTIME_URL" ] && [ -n "$RENDER_EXTERNAL_URL" ]; then
+    export AGENTCORE_RUNTIME_URL="$RENDER_EXTERNAL_URL"
+fi
+echo "entrypoint: starting A2A server on 0.0.0.0:$AGENT_PORT (card url: ${AGENTCORE_RUNTIME_URL:-http://localhost:$AGENT_PORT/})"
+
 exec python main.py
