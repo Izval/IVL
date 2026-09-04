@@ -179,25 +179,56 @@ def _extract_pair(text: str) -> str:
     return m.group(1) if m else "BNB-USDT"
 
 
-async def _run_rebalance(prompt: str, *, session_id: str) -> str:
-    """Hook ``run_work`` DETERMINISTA: IVL → plan/tx, sin LLM.
+def _agent_owner_address() -> str | None:
+    """studio.toml ``[wallet].address`` — the agent's PUBLIC signer address (no
+    keystore unlock). Used to read the live on-chain position for the deliverable so
+    the deterministic, no-LLM hook stays unlocked."""
+    try:
+        from bnbagent_studio_core import config
 
-    Devuelve el manifiesto legible + un bloque JSON máquina-legible. La ejecución
-    onchain con firma (approve+mint) vive en ``rebalance.execute_rebalance`` (código
-    fijo, gated por wallet fondeada) — este hook produce el plan/dry-run del deliverable.
+        addr = ((config.load_studio_toml() or {}).get("wallet") or {}).get("address")
+        return str(addr) if addr else None
+    except Exception:  # noqa: BLE001 — a metadata read must never break fulfill
+        return None
+
+
+async def _run_rebalance(prompt: str, *, session_id: str) -> str:
+    """Hook ``run_work`` DETERMINISTA: IVL → plan/tx + posición viva, sin LLM.
+
+    Devuelve el manifiesto legible + un bloque JSON máquina-legible. El manifiesto
+    incluye la POSICIÓN VIVA on-chain del agente (tokenId, rango, in_range, explorer)
+    cuando existe, para que el comprador vea la LP real que respalda el plan. La
+    ejecución onchain con firma (approve+mint) vive en ``rebalance.execute_rebalance``
+    (código fijo, gated por wallet fondeada) — este hook produce el plan/dry-run.
     """
-    from rebalance import plan_rebalance, render_deliverable
+    from rebalance import plan_rebalance, render_deliverable, live_position
 
     pair = _extract_pair(prompt)
     report = await asyncio.to_thread(plan_rebalance, pair)
+
+    # Enriquecer con la posición viva (solo lectura, con la address pública de la
+    # wallet — sin desbloquear el keystore). Best-effort: nunca rompe el deliverable.
+    live_pos = None
+    owner = _agent_owner_address()
+    if owner:
+        fee = int((report.get("ivl_ticks") or {}).get("feeUnits") or 500)
+        cur = (report.get("pool") or {}).get("currentTick")
+        try:
+            live_pos = await asyncio.to_thread(
+                live_position, owner, fee=fee, pool_current_tick=cur
+            )
+        except Exception:  # noqa: BLE001 — live-position read is best-effort
+            live_pos = None
+
     machine = {
         "pair": report.get("pair"),
         "decision": report.get("decision"),
         "oriented_ticks": report.get("oriented_ticks"),
         "mint_tx": report.get("mint_tx"),
         "dry_run": report.get("dry_run"),
+        "live_position": live_pos,
     }
-    return render_deliverable(report) + "\n\nMACHINE_READABLE:\n" + json.dumps(
+    return render_deliverable(report, live_pos) + "\n\nMACHINE_READABLE:\n" + json.dumps(
         machine, ensure_ascii=False
     )
 

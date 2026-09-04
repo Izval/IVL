@@ -305,8 +305,47 @@ def execute_rebalance(
     return result
 
 
-def render_deliverable(report: dict[str, Any]) -> str:
-    """Manifiesto legible del rebalanceo — lo que el seller entrega (hook ``run_work``)."""
+def live_position(
+    owner: str,
+    *,
+    fee: int = 500,
+    config: pv3.RebalancerConfig = pv3.DEFAULT_TESTNET_CONFIG,
+    pool_current_tick: int | None = None,
+) -> dict[str, Any] | None:
+    """Read the agent's CURRENT on-chain v3 position for the pool. Read-only.
+
+    Uses only the public ``owner`` address (no keystore unlock), so it is safe to
+    call from the deterministic, no-LLM deliverable hook. Returns None when the
+    owner has no live position for (base, quote, fee). ``in_range`` is computed
+    against ``pool_current_tick`` when supplied.
+    """
+    config = config.checksummed()
+    w3 = pv3.connect(config)
+    pos = pv3.find_position(w3, config, Web3.to_checksum_address(owner), fee=fee)
+    if pos is None:
+        return None
+    in_range = (
+        pool_current_tick is not None
+        and pos.tick_lower <= int(pool_current_tick) <= pos.tick_upper
+    )
+    return {
+        "token_id": pos.token_id,
+        "tick_lower": pos.tick_lower,
+        "tick_upper": pos.tick_upper,
+        "in_range": in_range,
+        "liquidity": str(pos.liquidity),
+        "owner": Web3.to_checksum_address(owner),
+        "explorer": f"https://testnet.bscscan.com/token/{config.position_manager}?a={pos.token_id}",
+    }
+
+
+def render_deliverable(report: dict[str, Any], live_pos: dict[str, Any] | None = None) -> str:
+    """Manifiesto legible del rebalanceo — lo que el seller entrega (hook ``run_work``).
+
+    Cuando ``live_pos`` viene dado (posición on-chain viva del agente), añade un
+    bloque LIVE POSITION con el tokenId, el rango on-chain, in_range y el enlace al
+    explorer — para que el comprador vea la posición real que respalda el plan.
+    """
     d = report["decision"]
     ot = report.get("oriented_ticks", {})
     lines = [
@@ -329,6 +368,14 @@ def render_deliverable(report: dict[str, Any]) -> str:
         ]
     if "dry_run" in report:
         lines.append(f"  Dry-run: encoding_valid={report['dry_run'].get('encoding_valid')}")
+    if live_pos:
+        lines += [
+            "  Live position (on-chain):",
+            f"    tokenId {live_pos['token_id']} · range "
+            f"[{live_pos['tick_lower']}, {live_pos['tick_upper']}] · "
+            f"in_range={live_pos['in_range']} · liquidity={live_pos['liquidity']}",
+            f"    Explorer: {live_pos['explorer']}",
+        ]
     return "\n".join(lines)
 
 
