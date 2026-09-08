@@ -68,12 +68,14 @@ _PREVIEW = AgentSkill(
     name="Preview the rebalance plan (free)",
     description=(
         "Send a plain text message OR a data part "
-        '{"skill": "preview", "task_description": "BNB-USDT"} and receive, '
+        '{"skill": "preview", "task_description": "BNB-USDT 0xYourWallet"} and receive, '
         "SYNCHRONOUSLY in the response, the IVL rebalance plan for the pair: the "
-        "live IVL score + decision, the target on-chain ticks, and the agent's live "
-        "PancakeSwap v3 position (tokenId, range, in_range, explorer link). Free and "
-        "read-only — no ERC-8183 job, no payment, no signing. The paid delivery "
-        "(negotiate → notify_funded) remains the on-chain path."
+        "live IVL score + decision and the target on-chain ticks. Include YOUR wallet "
+        "address and it also reads YOUR live PancakeSwap v3 position (tokenId, range, "
+        "in_range) and recommends whether to rebalance it toward the IVL-optimal range "
+        "— non-custodial, read-only, it never touches your funds. Omit the wallet to "
+        "get the pair-level reading only. Free — no ERC-8183 job, no payment, no "
+        "signing. The paid delivery (negotiate → notify_funded) remains the on-chain path."
     ),
     tags=["preview", "rebalancing", "bnb-chain"],
     input_modes=["application/json"],

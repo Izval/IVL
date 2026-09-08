@@ -172,11 +172,19 @@ def _get_runner() -> InMemoryRunner:
 
 # Detecta el par (p.ej. "BNB-USDT") en la descripción del job; default flagship.
 _PAIR_RE = re.compile(r"\b([A-Z]{2,10}-[A-Z]{2,10})\b")
+_WALLET_RE = re.compile(r"\b(0x[a-fA-F0-9]{40})\b")
 
 
 def _extract_pair(text: str) -> str:
     m = _PAIR_RE.search(text or "")
     return m.group(1) if m else "BNB-USDT"
+
+
+def _extract_wallet(text: str) -> str | None:
+    """A client wallet in the request → read THEIR position (non-custodial advisory).
+    Absent → the deliverable falls back to the agent's own position."""
+    m = _WALLET_RE.search(text or "")
+    return m.group(1) if m else None
 
 
 def _agent_owner_address() -> str | None:
@@ -205,21 +213,23 @@ async def _run_rebalance(prompt: str, *, session_id: str) -> str:
     from pancake_v3 import resolve_config
 
     pair = _extract_pair(prompt)
+    client = _extract_wallet(prompt)  # non-custodial: read the CLIENT's position when given
     cfg = resolve_config()  # testnet by default; mainnet when the service opts in
     # do_dry_run=False: the deliverable doesn't need the eth_call dry-run (a dev-only
     # encoding check), and dropping it keeps preview under the marketplace's dispatch timeout.
     report = await asyncio.to_thread(plan_rebalance, pair, do_dry_run=False, config=cfg)
 
-    # Enriquecer con la posición viva (solo lectura, con la address pública de la
-    # wallet — sin desbloquear el keystore). Best-effort: nunca rompe el deliverable.
+    # Read the SUBJECT's live position (read-only, public address — no keystore unlock):
+    # the client's when they provided a wallet (a reading OF their position vs the
+    # IVL-optimal range), else the agent's own. Best-effort: never breaks the deliverable.
     live_pos = None
-    owner = _agent_owner_address()
-    if owner:
+    subject = client or _agent_owner_address()
+    if subject:
         fee = int((report.get("ivl_ticks") or {}).get("feeUnits") or 500)
         cur = (report.get("pool") or {}).get("currentTick")
         try:
             live_pos = await asyncio.to_thread(
-                live_position, owner, fee=fee, pool_current_tick=cur, config=cfg
+                live_position, subject, fee=fee, pool_current_tick=cur, config=cfg
             )
         except Exception:  # noqa: BLE001 — live-position read is best-effort
             live_pos = None
@@ -230,9 +240,11 @@ async def _run_rebalance(prompt: str, *, session_id: str) -> str:
         "oriented_ticks": report.get("oriented_ticks"),
         "mint_tx": report.get("mint_tx"),
         "dry_run": report.get("dry_run"),
+        "subject": subject,
+        "is_client_position": bool(client),
         "live_position": live_pos,
     }
-    return render_deliverable(report, live_pos) + "\n\nMACHINE_READABLE:\n" + json.dumps(
+    return render_deliverable(report, live_pos, client=bool(client)) + "\n\nMACHINE_READABLE:\n" + json.dumps(
         machine, ensure_ascii=False
     )
 
