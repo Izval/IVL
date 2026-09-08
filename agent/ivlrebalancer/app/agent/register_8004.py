@@ -40,13 +40,18 @@ def register(name: str, endpoint: str, description: str, *, network: str = "bsc-
     agent_id = result.get("agentId")
     tx_hash = result.get("transactionHash")
     tx_hash = tx_hash.hex() if hasattr(tx_hash, "hex") else str(tx_hash)
+    # Derive the explorer/scan links from the network actually used (was hardcoded
+    # to testnet, which mislabeled mainnet registrations).
+    is_mainnet = "mainnet" in network.lower()
+    explorer_base = "https://bscscan.com" if is_mainnet else "https://testnet.bscscan.com"
+    scan_chain = 56 if is_mainnet else 97
     return {
         "success": bool(result.get("success", True)),
         "agent_id": agent_id,
         "owner": sdk.wallet_address,
         "tx_hash": tx_hash,
-        "explorer_tx": f"https://testnet.bscscan.com/tx/{tx_hash}",
-        "scan": f"https://8004scan.io/agent/{agent_id}?chain=97" if agent_id is not None else None,
+        "explorer_tx": f"{explorer_base}/tx/{tx_hash}",
+        "scan": f"https://8004scan.io/agent/{agent_id}?chain={scan_chain}" if agent_id is not None else None,
         "agent_uri_head": agent_uri[:80],
     }
 
