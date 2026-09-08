@@ -118,10 +118,25 @@ class SellerCore:
         clamped = signing.clamp_price(signing.list_price())
         return signing.sign_quote(request, clamped)
 
+    async def preview(self, data: dict[str, Any]) -> dict[str, Any]:
+        """FREE, read-only preview of the deliverable — no job, no signing, no LLM.
+
+        Runs the SAME deterministic work hook the paid delivery uses
+        (``run_work`` = ``_run_rebalance``): live IVL range + on-chain ticks + the
+        agent's live position. Returns the manifest text so a caller (e.g. a
+        marketplace hire sending a plain text message) can render it synchronously.
+        The paid ERC-8183 job (negotiate → notify_funded) remains the "real" path;
+        this is the judge/preview-visible work-product. Fits the no-money-in-the-LLM
+        boundary: structured, named, deterministic, never touches ``signing.py``.
+        """
+        task = data.get("task_description") or data.get("task") or data.get("pair") or "BNB-USDT"
+        text = await self._run_work(str(task), session_id="preview")
+        return {"status": "ok", "deliverable": text}
+
     @staticmethod
     def _skills() -> list[str]:
-        """The seller's two advertised skills."""
-        return ["negotiate", "notify_funded"]
+        """The seller's advertised skills."""
+        return ["negotiate", "notify_funded", "preview"]
 
     async def notify_funded(self, data: dict[str, Any]) -> dict[str, Any]:
         """Buyer notification: "I funded job X — please deliver."

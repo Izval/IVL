@@ -37,8 +37,8 @@ from typing import Any
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
-from a2a.types import DataPart, InternalError, Part
-from a2a.utils import get_data_parts, new_agent_parts_message
+from a2a.types import DataPart, InternalError, Part, TextPart
+from a2a.utils import get_data_parts, get_text_parts, new_agent_parts_message
 from a2a.utils.errors import ServerError
 
 from seller_core import SellerCore
@@ -54,24 +54,42 @@ class SellerAgentExecutor(SellerCore, AgentExecutor):
     :class:`seller_core.SellerCore`; this class adds only the A2A entrypoints and
     request/response wire helpers.
 
-    The agent exposes ONLY the two paid, structured skills — there is no
-    free-form chat skill. A plain text message (no ``{"skill": ...}`` DataPart)
-    is rejected: negotiate / notify_funded always need a structured DataPart, so
-    prose never triggers an LLM call or a paid action.
+    The two PAID skills (negotiate / notify_funded) always need a structured
+    DataPart, so money never rides on prose. The one exception is ``preview``: a
+    FREE, read-only skill that also answers a plain TEXT message (the shape a
+    generic marketplace hire sends), returning the deterministic rebalance plan +
+    live on-chain position synchronously as a text part — no LLM, no signing, no
+    ERC-8183 job.
     """
 
     # -- A2A entrypoints -------------------------------------------------------
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         data = self._inbound(context)
         skill = data.get("skill")
+        text = self._inbound_text(context)
+        # Preview: explicit {"skill":"preview"} DataPart OR a bare text message
+        # (no skill envelope) — the shape a generic marketplace hire sends. Free,
+        # read-only, synchronous; replies with a TEXT part so text-part parsers
+        # (e.g. the marketplace deliverable reader) pick it up.
+        if skill == "preview" or (skill is None and text):
+            try:
+                result = await self.preview(
+                    {"task_description": data.get("task_description") or text}
+                )
+            except Exception as e:  # noqa: BLE001 — surface as JSON-RPC -32603
+                logger.exception("preview failed")
+                raise ServerError(
+                    error=InternalError(message=f"{type(e).__name__}: {e}")
+                ) from e
+            await self._reply_text(event_queue, context, result.get("deliverable", ""))
+            return
         try:
             if skill == "negotiate":
                 result = await self.negotiate(data)
             elif skill == "notify_funded":
                 result = await self.notify_funded(data)
             else:
-                # Includes a plain text message (no DataPart → skill is None):
-                # the seller has no free-form skill, so prose is rejected here.
+                # A DataPart with an unknown/absent skill (and no text to preview).
                 result = {
                     "error": f"unknown skill: {skill!r}",
                     "skills": self._skills(),
@@ -110,6 +128,23 @@ class SellerAgentExecutor(SellerCore, AgentExecutor):
         parts = context.message.parts if context.message else []
         data_parts = get_data_parts(parts) if parts else []
         return data_parts[0] if data_parts else {}
+
+    @staticmethod
+    def _inbound_text(context: RequestContext) -> str:
+        """Join any text parts of the inbound message (the shape a generic hire sends)."""
+        parts = context.message.parts if context.message else []
+        return " ".join(get_text_parts(parts)).strip() if parts else ""
+
+    @staticmethod
+    async def _reply_text(event_queue: EventQueue, context: RequestContext, text: str) -> None:
+        """Reply with a single TEXT part (preview) so text-part parsers read it."""
+        await event_queue.enqueue_event(
+            new_agent_parts_message(
+                [Part(root=TextPart(text=text))],
+                context_id=context.context_id,
+                task_id=context.task_id,
+            )
+        )
 
     @staticmethod
     async def _reply(event_queue: EventQueue, context: RequestContext, data: dict[str, Any]) -> None:

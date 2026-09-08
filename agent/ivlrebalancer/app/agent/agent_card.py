@@ -63,6 +63,23 @@ _NOTIFY_FUNDED = AgentSkill(
     output_modes=["application/json"],
 )
 
+_PREVIEW = AgentSkill(
+    id="preview",
+    name="Preview the rebalance plan (free)",
+    description=(
+        "Send a plain text message OR a data part "
+        '{"skill": "preview", "task_description": "BNB-USDT"} and receive, '
+        "SYNCHRONOUSLY in the response, the IVL rebalance plan for the pair: the "
+        "live IVL score + decision, the target on-chain ticks, and the agent's live "
+        "PancakeSwap v3 position (tokenId, range, in_range, explorer link). Free and "
+        "read-only — no ERC-8183 job, no payment, no signing. The paid delivery "
+        "(negotiate → notify_funded) remains the on-chain path."
+    ),
+    tags=["preview", "rebalancing", "bnb-chain"],
+    input_modes=["application/json"],
+    output_modes=["application/json"],
+)
+
 def _agent_name() -> str:
     """Card name from studio.toml ``[project].name`` (best-effort)."""
     try:
@@ -107,10 +124,10 @@ def build_agent_card() -> AgentCard:
         scope = os.environ["OAUTH_SCOPE"]
         extra["security_schemes"] = {"oauth2": scheme}
         extra["security"] = [{"oauth2": [scope]}]
-    skills = [_NEGOTIATE, _NOTIFY_FUNDED]
+    skills = [_NEGOTIATE, _NOTIFY_FUNDED, _PREVIEW]
     return AgentCard(
         name=name,
-        description=f"ERC-8183 seller agent ({name}) — negotiate + notify_funded over A2A.",
+        description=f"ERC-8183 seller agent ({name}) — negotiate + notify_funded + free preview over A2A.",
         # serve_a2a overwrites this with $AGENTCORE_RUNTIME_URL at runtime.
         # Local-dev fallback: a client-routable localhost URL (not the 0.0.0.0
         # bind address). Host via AGENT_HOST (default localhost); port via the

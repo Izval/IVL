@@ -204,7 +204,9 @@ async def _run_rebalance(prompt: str, *, session_id: str) -> str:
     from rebalance import plan_rebalance, render_deliverable, live_position
 
     pair = _extract_pair(prompt)
-    report = await asyncio.to_thread(plan_rebalance, pair)
+    # do_dry_run=False: the deliverable doesn't need the eth_call dry-run (a dev-only
+    # encoding check), and dropping it keeps preview under the marketplace's dispatch timeout.
+    report = await asyncio.to_thread(plan_rebalance, pair, do_dry_run=False)
 
     # Enriquecer con la posición viva (solo lectura, con la address pública de la
     # wallet — sin desbloquear el keystore). Best-effort: nunca rompe el deliverable.
