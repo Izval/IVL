@@ -407,16 +407,18 @@ def _main() -> None:
                     help="permite mintear fuera de rango (single-sided) — deliberado, se salta la guarda")
     args = ap.parse_args()
 
+    cfg = pv3.resolve_config()  # testnet by default; mainnet when the service opts in
+
     if args.execute:
         # Broadcast real: gated por credenciales. Nunca simula.
         result = execute_rebalance(
-            args.pair, cap_base_human=args.cap_base,
+            args.pair, cap_base_human=args.cap_base, config=cfg,
             anchor_live=args.anchor_live, allow_out_of_range=args.allow_out_of_range,
         )
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
 
-    report = plan_rebalance(args.pair, recipient=args.recipient, anchor_live=args.anchor_live)
+    report = plan_rebalance(args.pair, recipient=args.recipient, config=cfg, anchor_live=args.anchor_live)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:

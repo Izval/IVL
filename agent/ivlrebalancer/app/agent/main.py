@@ -202,11 +202,13 @@ async def _run_rebalance(prompt: str, *, session_id: str) -> str:
     (código fijo, gated por wallet fondeada) — este hook produce el plan/dry-run.
     """
     from rebalance import plan_rebalance, render_deliverable, live_position
+    from pancake_v3 import resolve_config
 
     pair = _extract_pair(prompt)
+    cfg = resolve_config()  # testnet by default; mainnet when the service opts in
     # do_dry_run=False: the deliverable doesn't need the eth_call dry-run (a dev-only
     # encoding check), and dropping it keeps preview under the marketplace's dispatch timeout.
-    report = await asyncio.to_thread(plan_rebalance, pair, do_dry_run=False)
+    report = await asyncio.to_thread(plan_rebalance, pair, do_dry_run=False, config=cfg)
 
     # Enriquecer con la posición viva (solo lectura, con la address pública de la
     # wallet — sin desbloquear el keystore). Best-effort: nunca rompe el deliverable.
@@ -217,7 +219,7 @@ async def _run_rebalance(prompt: str, *, session_id: str) -> str:
         cur = (report.get("pool") or {}).get("currentTick")
         try:
             live_pos = await asyncio.to_thread(
-                live_position, owner, fee=fee, pool_current_tick=cur
+                live_position, owner, fee=fee, pool_current_tick=cur, config=cfg
             )
         except Exception:  # noqa: BLE001 — live-position read is best-effort
             live_pos = None

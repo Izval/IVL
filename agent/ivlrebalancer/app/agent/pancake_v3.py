@@ -99,6 +99,43 @@ class RebalancerConfig:
 
 DEFAULT_TESTNET_CONFIG = RebalancerConfig()
 
+# BSC mainnet (chainId 56) — addresses verified on-chain 2026-09-02 (see
+# docs/agent-ivl-mainnet.md). The pool is well-priced, so build_mint_plan uses
+# IVL's ABSOLUTE ticks here (chain_id != 97 disables the testnet live-anchor).
+MAINNET_RPCS = (
+    "https://bsc-dataseed.bnbchain.org",
+    "https://bsc-rpc.publicnode.com",
+    "https://bsc-dataseed1.binance.org",
+)
+
+MAINNET_CONFIG = RebalancerConfig(
+    factory="0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",           # PancakeV3Factory (deterministic multichain)
+    position_manager="0x46A15B0b27311cedF172AB29E4f4766fbE7F4364",   # NonfungiblePositionManager (mainnet)
+    base_token="0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",         # WBNB
+    quote_token="0x55d398326f99059fF775485246999027B3197955",        # USDT (BSC-USD, 18 dec)
+    base_symbol="WBNB",
+    quote_symbol="USDT",
+    chain_id=56,
+    rpcs=MAINNET_RPCS,
+)
+
+
+def resolve_config() -> RebalancerConfig:
+    """Pick the network config at runtime, so one image serves either network.
+
+    Selection: env ``IVL_NETWORK`` wins, else studio.toml ``[network].default``.
+    Falls back to testnet, so existing testnet deploys are unaffected — mainnet
+    is opted into explicitly (a ``bsc-mainnet`` network / ``IVL_NETWORK``).
+    """
+    net = os.environ.get("IVL_NETWORK", "")
+    if not net:
+        try:
+            from bnbagent_studio_core import config as _cfg  # lazy: SDK only in runtime image
+            net = str(((_cfg.load_studio_toml() or {}).get("network") or {}).get("default") or "")
+        except Exception:  # noqa: BLE001 — best-effort; default to testnet below
+            net = ""
+    return MAINNET_CONFIG if "mainnet" in net.lower() else DEFAULT_TESTNET_CONFIG
+
 # --- ABIs mínimas ------------------------------------------------------------
 FACTORY_ABI = [
     {"inputs": [{"type": "address"}, {"type": "address"}, {"type": "uint24"}],
