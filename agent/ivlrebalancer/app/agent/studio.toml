@@ -15,7 +15,7 @@ runtime = "agentcore"
 protocol = "A2A"
 
 [network]
-default = "bsc-testnet"
+default = "bsc-mainnet"
 
 [deploy]
 # Deploy destination (orthogonal to [stack].runtime). 'platform' deploys
@@ -39,8 +39,10 @@ platform_artifact = "zip"
 kind = "evm-local"
 signer = "local"
 keystore_dir = "../../.studio/wallets"
-# address = "0x..."   # filled by `bag wallet new`
-address = "0xa1Fe55DCf41c1D3805Aad41D4aD1C9E1E06F06f1"
+# MAINNET signer — DEDICATED agent wallet (NOT the personal wallet). Its keystore +
+# WALLET_PASSWORD live on the server (Render secrets — NEVER committed), so it holds
+# only limited funds. Funded from the personal wallet; ERC-8183 payments land here.
+address = "0x6D19d43fC2cd226B135ED5f9F82b366AC864b703"
 
 [llm]
 provider = "anthropic"
@@ -50,10 +52,10 @@ model = "claude-sonnet-4-5"
 # Read by the Agent: it quotes the FIXED `price`, CLAMPS it to [min,max],
 # freezes a short-TTL offer, and EIP-191 signs it — pricing is rule-based, the
 # LLM never prices.
-currency = "0xc70B8741B8B07A6d61E54fd4B20f22Fa648E5565"   # $U token address — prefilled from [network].default
-price = "100000000000000000"                   # wei — your list price (0.1 U); what every quote charges
+currency = "0x55d398326f99059fF775485246999027B3197955"   # USDT (BSC-USD, 18 dec) on BSC mainnet
+price = "1000000000000000000"                  # wei — list price = 1 USDT per rebalance (preview is free)
 min_price = "0"                                # wei — clamp floor
-max_price = ""                                 # wei — clamp ceiling; SET before going live
+max_price = "3000000000000000000"              # wei — clamp ceiling = 3 USDT
 quote_ttl_seconds = 900                        # seconds a signed quote stays valid; SDK caps at 900 (~15min work window)
 default_estimated_completion_seconds = 600
 poll_interval_seconds = 30
