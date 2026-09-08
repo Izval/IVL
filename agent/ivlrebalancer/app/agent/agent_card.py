@@ -128,6 +128,9 @@ def build_agent_card() -> AgentCard:
     return AgentCard(
         name=name,
         description=f"ERC-8183 seller agent ({name}) — negotiate + notify_funded + free preview over A2A.",
+        # Brand icon (A2A `iconUrl`) — the agent's own logo, hosted on its own site.
+        # Consumers that lack an image for this agent may use it as an avatar/cover.
+        icon_url="https://zvlint.com/ventures/ivl-logo.jpg",
         # serve_a2a overwrites this with $AGENTCORE_RUNTIME_URL at runtime.
         # Local-dev fallback: a client-routable localhost URL (not the 0.0.0.0
         # bind address). Host via AGENT_HOST (default localhost); port via the

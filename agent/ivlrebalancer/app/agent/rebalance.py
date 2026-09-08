@@ -254,7 +254,7 @@ def execute_rebalance(
                 sender, tmp_plan, pos, burn=(intent == "reset")
             )
         else:
-            result["steps"]["withdraw"] = {"skipped": "sin posición previa → se abre una nueva"}
+            result["steps"]["withdraw"] = {"skipped": "no prior position → opening a new one"}
 
     # 2) Sondear el pool (tick/orientación/precio vivo) con amounts nominales, para
     #    dimensionar el depósito con el PRECIO VIVO en modo anchor (no el de mercado IVL).
@@ -271,8 +271,8 @@ def execute_rebalance(
     )
     if amount_base <= 0 and amount_quote <= 0:
         raise RuntimeError(
-            "wallet sin saldo de WBNB/USDT para mintear. Fondea con el faucet y envuelve tBNB→WBNB "
-            "(ver README → handoff). El agente no simula: no hay capital que desplegar."
+            "wallet has no WBNB/USDT balance to mint. Fund it from the faucet and wrap tBNB→WBNB "
+            "(see README → handoff). The agent does not simulate: there is no capital to deploy."
         )
 
     # 4) Construir el mint real con los ticks (anclados o absolutos) de IVL.
@@ -284,9 +284,9 @@ def execute_rebalance(
     # En modo anchor siempre es in-range por construcción; el guard protege el modo absoluto.
     if not plan.in_range and not allow_out_of_range:
         raise RuntimeError(
-            f"rango [{plan.tick_lower},{plan.tick_upper}] FUERA del tick vivo del pool "
-            f"({plan.pool_tick}) → la posición sería single-sided sin fees. Usa modo anchor "
-            f"(default testnet) o pasa allow_out_of_range=True si es deliberado."
+            f"range [{plan.tick_lower},{plan.tick_upper}] is OUTSIDE the pool's live tick "
+            f"({plan.pool_tick}) → the position would be single-sided with no fees. Use anchor mode "
+            f"(testnet default) or pass allow_out_of_range=True if this is deliberate."
         )
     result["oriented_ticks"] = {
         "tickLower": plan.tick_lower, "tickUpper": plan.tick_upper,
