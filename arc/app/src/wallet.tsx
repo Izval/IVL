@@ -8,8 +8,8 @@ import { useState, type ReactNode } from "react";
 import { connectorsForWallets, lightTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { injectedWallet } from "@rainbow-me/rainbowkit/wallets";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createConfig, http, WagmiProvider } from "wagmi";
-import { arc } from "./chain";
+import { createConfig, fallback, http, WagmiProvider } from "wagmi";
+import { API_BASE, arc } from "./chain";
 
 const g = globalThis as unknown as { Buffer?: unknown; global?: unknown };
 if (typeof g.Buffer === "undefined") g.Buffer = Buffer;
@@ -23,7 +23,9 @@ const connectors = connectorsForWallets([{ groupName: "Installed", wallets: [inj
 export const wagmiConfig = createConfig({
   chains: [arc],
   connectors,
-  transports: { [arc.id]: http() },
+  // Reads go through the Worker's same-origin relay first (some browsers can't reach Arc's public
+  // RPC directly), then straight to the public RPC. Transactions are sent by the wallet itself.
+  transports: { [arc.id]: fallback([http(`${API_BASE}/v1/rpc`, { batch: true }), http()]) },
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -32,6 +34,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
+          locale="en-US"
           modalSize="compact"
           theme={lightTheme({ accentColor: "#2b2927", accentColorForeground: "#ece9e5", borderRadius: "small", fontStack: "system", overlayBlur: "small" })}
         >

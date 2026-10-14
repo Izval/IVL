@@ -50,7 +50,14 @@ export function PoolPage({ address }: { address: string }) {
       ]);
       const [token0, token1] = await Promise.all([readToken(client, t0), readToken(client, t1)]);
       setChain({ token0, token1, fee, price: sqrtPriceX96ToPrice(slot0[0], token0.decimals, token1.decimals) });
-    })().catch(() => setChainError("This address is not a Uniswap v3 pool on Arc."));
+    })().catch((e) =>
+      setChainError(
+        // A revert or empty return means the contract isn't a v3 pool; anything else is the network.
+        /revert|returned no data|does not have the function/i.test(String(e?.message ?? e))
+          ? "This address is not a Uniswap v3 pool on Arc."
+          : "Couldn't reach Arc to read this pool. Check your connection and reload."
+      )
+    );
   }, [address, client]);
 
   useScrollReveal([a?.updatedAt, !!chain]);

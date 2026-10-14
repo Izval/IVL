@@ -12,7 +12,7 @@
 
 import { listV3Pools, V3_DEX } from "./gecko.mjs";
 import { analyzePool } from "./analyze.mjs";
-import { advanceIndex, INDEX_KEY, indexedCandles } from "./arc-index.mjs";
+import { advanceIndex, ARC_RPCS, INDEX_KEY, indexedCandles } from "./arc-index.mjs";
 import { getReferenceCandles, MARKETS } from "./reference.mjs";
 import { FEATURED } from "./featured.mjs";
 
@@ -31,7 +31,7 @@ const ADDR_RE = /^0x[0-9a-f]{40}$/;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -47,14 +47,14 @@ function json(data, status = 200, cacheSeconds = 0) {
 }
 
 // Per-IP limit through the Cache API (same pattern as api.zvlint.com).
-async function underRateLimit(request) {
+async function underRateLimit(request, limit = RL_LIMIT, bucket = "rl") {
   const ip = request.headers.get("CF-Connecting-IP") || "anon";
   const origin = new URL(request.url).origin;
   const window = Math.floor(Date.now() / 1000 / RL_WINDOW_SEC);
-  const key = new Request(`${origin}/__rl/${encodeURIComponent(ip)}/${window}`);
+  const key = new Request(`${origin}/__${bucket}/${encodeURIComponent(ip)}/${window}`);
   const hit = await caches.default.match(key);
   const count = (hit ? parseInt(await hit.text(), 10) || 0 : 0) + 1;
-  if (count > RL_LIMIT) return false;
+  if (count > limit) return false;
   await caches.default.put(key, new Response(String(count), { headers: { "Cache-Control": `max-age=${RL_WINDOW_SEC}` } }));
   return true;
 }
@@ -166,12 +166,53 @@ async function assetOr404(request, env) {
   return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 }
 
+// Read-only JSON-RPC relay to Arc for the app. Some visitors' browsers cannot reach Arc's public
+// RPCs directly (network filters, extensions); same-origin through the Worker always works. Only
+// read methods pass: transactions are sent by the user's wallet through its own RPC.
+const RPC_READ = new Set([
+  "eth_chainId", "eth_blockNumber", "eth_call", "eth_estimateGas", "eth_gasPrice", "eth_maxPriorityFeePerGas",
+  "eth_feeHistory", "eth_getBalance", "eth_getCode", "eth_getTransactionCount", "eth_getBlockByNumber",
+  "eth_getTransactionByHash", "eth_getTransactionReceipt", "net_version",
+]);
+const RPC_LIMIT = 600; // requests per IP per minute; viem batches a page's reads into a few requests
+const RPC_MAX_BODY = 64 * 1024;
+const RPC_MAX_BATCH = 50;
+
+async function relayRpc(request) {
+  if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  if (!(await underRateLimit(request, RPC_LIMIT, "rpc"))) return json({ error: "rate_limited" }, 429);
+  const body = await request.text();
+  if (body.length > RPC_MAX_BODY) return json({ error: "too_large" }, 413);
+  let msg;
+  try {
+    msg = JSON.parse(body);
+  } catch {
+    return json({ error: "bad_json" }, 400);
+  }
+  const calls = Array.isArray(msg) ? msg : [msg];
+  if (!calls.length || calls.length > RPC_MAX_BATCH || !calls.every((c) => RPC_READ.has(c?.method))) {
+    return json({ error: "method_not_allowed" }, 403);
+  }
+  let last = null;
+  for (const rpcUrl of ARC_RPCS) {
+    try {
+      const res = await fetch(rpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(15000) });
+      if (res.ok) return new Response(res.body, { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS } });
+      last = `HTTP ${res.status}`;
+    } catch (e) {
+      last = String(e.message ?? e);
+    }
+  }
+  return json({ error: "upstream_error", detail: last }, 502);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname.startsWith("/assets/")) return assetOr404(request, env);
     if (!url.pathname.startsWith("/v1/")) return env.ASSETS.fetch(request);
+    if (url.pathname === "/v1/rpc") return relayRpc(request);
     if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
     if (!(await underRateLimit(request))) return json({ error: "rate_limited" }, 429);
 
