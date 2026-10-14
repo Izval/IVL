@@ -1,0 +1,33 @@
+# IVL on Arc: read-only API + static app in a single Worker.
+# Deploy from this dir: `npm run deploy` (builds ../app first).
+name = "ivl-arc"
+main = "src/index.mjs"
+compatibility_date = "2026-06-01"
+
+# Static app (Vite build). API paths run the Worker; everything else is the SPA.
+[assets]
+directory = "../app/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/v1/*", "/assets/*"]
+
+# Screener cache (created with `npx wrangler kv namespace create IVL_ARC_KV`).
+[[kv_namespaces]]
+binding = "IVL_ARC_KV"
+id = "e5b6e6aedd8e4deea8665a859ecb41d9"
+
+# Recompute the screener every 30 min.
+[triggers]
+crons = ["*/30 * * * *"]
+
+[[routes]]
+pattern = "arc.zvlint.com"
+custom_domain = true
+
+[[routes]]
+pattern = "invala.app"
+custom_domain = true
+
+[[routes]]
+pattern = "www.invala.app"
+custom_domain = true

@@ -1,0 +1,13 @@
+{
+  "name": "ivl-arc-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "npm run snapshot && npm --prefix ../app run build && wrangler deploy",
+    "snapshot": "node scripts/snapshot.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.150.0"
+  }
+}
