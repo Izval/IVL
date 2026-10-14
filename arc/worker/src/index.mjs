@@ -174,6 +174,10 @@ const RPC_READ = new Set([
   "eth_feeHistory", "eth_getBalance", "eth_getCode", "eth_getTransactionCount", "eth_getBlockByNumber",
   "eth_getTransactionByHash", "eth_getTransactionReceipt", "net_version",
 ]);
+const RPC_CACHEABLE = new Set(["eth_chainId", "eth_blockNumber", "eth_call", "eth_getCode", "net_version"]);
+const RPC_CACHE_SEC = 10;
+const sha256 = async (text) =>
+  [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const RPC_LIMIT = 600; // requests per IP per minute; viem batches a page's reads into a few requests
 const RPC_MAX_BODY = 64 * 1024;
 const RPC_MAX_BATCH = 50;
@@ -193,17 +197,53 @@ async function relayRpc(request) {
   if (!calls.length || calls.length > RPC_MAX_BATCH || !calls.every((c) => RPC_READ.has(c?.method))) {
     return json({ error: "method_not_allowed" }, 403);
   }
+  // Arc's RPCs rate-limit items inside a batch (-32005): those items are retried on the next
+  // endpoint, so one throttled upstream doesn't break the page.
+  const limited = (r) => r?.error && (r.error.code === -32005 || /rate limit/i.test(r.error.message ?? ""));
+  const byId = new Map();
+  let pending = calls;
+  // Same reads from every visitor of a pool page: serve them from the edge for a few seconds. The
+  // key drops the JSON-RPC ids (they differ per client), which are mapped back on the way out.
+  const cacheable = calls.every((c) => RPC_CACHEABLE.has(c.method));
+  const cacheKey = cacheable
+    ? new Request(`${new URL(request.url).origin}/__rpc/${await sha256(JSON.stringify(calls.map((c) => [c.method, c.params])))}`)
+    : null;
+  if (cacheKey) {
+    const hit = await caches.default.match(cacheKey);
+    if (hit) {
+      const cached = await hit.json();
+      const out = calls.map((c, i) => ({ ...cached[i], id: c.id }));
+      return json(Array.isArray(msg) ? out : out[0]);
+    }
+  }
   let last = null;
-  for (const rpcUrl of ARC_RPCS) {
+  for (const rpcUrl of [...ARC_RPCS, ...ARC_RPCS]) {
+    if (byId.size) await new Promise((r) => setTimeout(r, 600)); // second round: back off first
     try {
-      const res = await fetch(rpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(15000) });
-      if (res.ok) return new Response(res.body, { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS } });
-      last = `HTTP ${res.status}`;
+      const res = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(Array.isArray(msg) ? pending : pending[0]),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        last = `HTTP ${res.status}`;
+        continue;
+      }
+      const out = await res.json();
+      for (const r of Array.isArray(out) ? out : [out]) if (!limited(r) || !byId.has(r.id)) byId.set(r.id, r);
+      pending = pending.filter((c) => !byId.has(c.id) || limited(byId.get(c.id)));
+      if (!pending.length) break;
     } catch (e) {
       last = String(e.message ?? e);
     }
   }
-  return json({ error: "upstream_error", detail: last }, 502);
+  if (!byId.size) return json({ error: "upstream_error", detail: last }, 502);
+  const results = calls.map((c) => byId.get(c.id) ?? { jsonrpc: "2.0", id: c.id, error: { code: -32005, message: "rate limit exceeded" } });
+  if (cacheKey && results.every((r) => !r.error)) {
+    await caches.default.put(cacheKey, new Response(JSON.stringify(results), { headers: { "Cache-Control": `max-age=${RPC_CACHE_SEC}` } }));
+  }
+  return json(Array.isArray(msg) ? results : results[0]);
 }
 
 export default {

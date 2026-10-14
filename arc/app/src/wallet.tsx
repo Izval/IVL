@@ -25,7 +25,7 @@ export const wagmiConfig = createConfig({
   connectors,
   // Reads go through the Worker's same-origin relay first (some browsers can't reach Arc's public
   // RPC directly), then straight to the public RPC. Transactions are sent by the wallet itself.
-  transports: { [arc.id]: fallback([http(`${API_BASE}/v1/rpc`, { batch: true }), http()]) },
+  transports: { [arc.id]: fallback([http(`${API_BASE}/v1/rpc`, { batch: { batchSize: 10 } }), http()]) },
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
