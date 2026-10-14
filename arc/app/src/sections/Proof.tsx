@@ -4,12 +4,20 @@ import { Link } from "../App";
 import { Segmented } from "../ui";
 import { SectionHead } from "./SectionHead";
 
-// One-year replay of Arc's featured pools (public/featured snapshots, worker/src/compare.mjs), normalized units.
-const RESEARCH = [
-  { pair: "cirBTC / USDC", ivl: 144.1, naive: -32.3, il: -44, reb: [10, 18] },
-  { pair: "EURC / USDC", ivl: 65.0, naive: -31.9, il: -51, reb: [14, 27] },
-  { pair: "XAUM / USDC", ivl: -27.7, naive: -86.4, il: -61, reb: [16, 30] },
-];
+// One-year replay of Arc's featured pools, read from the snapshots that ship with this build
+// (public/featured, refreshed on every deploy), so the figures always match the live charts.
+const SNAPSHOTS = import.meta.glob<PoolAnalysis>("../../public/featured/*.json", { eager: true, import: "default" });
+const RESEARCH = Object.values(SNAPSHOTS)
+  .filter((p) => p.compare)
+  .map((p) => {
+    const { withIvl: w, fixed: f } = p.compare!;
+    return { pair: p.name, ivl: w.net, naive: f.net, il: Math.round((100 * (w.il - f.il)) / f.il), reb: [w.rebalances, f.rebalances] };
+  })
+  .sort((a, b) => b.ivl - a.ivl);
+const IL_CUT = RESEARCH.map((r) => -r.il);
+const REB_RATIO = RESEARCH.reduce((a, r) => a + r.reb[1] / Math.max(1, r.reb[0]), 0) / Math.max(1, RESEARCH.length);
+const BEAT = RESEARCH.filter((r) => r.ivl > r.naive).length;
+const TURNED = RESEARCH.filter((r) => r.ivl > 0 && r.naive < 0).length;
 
 export function Proof({
   featured,
@@ -35,21 +43,28 @@ export function Proof({
       <div className="kpi-row" data-reveal="stagger">
         <div className="kpi">
           <span className="kpi-big mono">
-            <span data-count="44">44</span>–<span data-count="61" data-suffix="%">61%</span>
+            <span data-count={Math.min(...IL_CUT)}>{Math.min(...IL_CUT)}</span>–
+            <span data-count={Math.max(...IL_CUT)} data-suffix="%">
+              {Math.max(...IL_CUT)}%
+            </span>
           </span>
           <span className="kpi-s">less impermanent-loss exposure than a naive band</span>
         </div>
         <div className="kpi">
           <span className="kpi-big mono">
-            <span data-count="2" data-suffix="×">2×</span>
+            <span data-count={REB_RATIO.toFixed(1)} data-dp="1" data-suffix="×">
+              {REB_RATIO.toFixed(1)}×
+            </span>
           </span>
-          <span className="kpi-s">fewer rebalances (about half): IVL waits for a new range instead of chasing price</span>
+          <span className="kpi-s">fewer rebalances on average: IVL waits for a new range instead of chasing price</span>
         </div>
         <div className="kpi">
           <span className="kpi-big mono">
-            <span data-count="3">3</span>/3
+            <span data-count={BEAT}>{BEAT}</span>/{RESEARCH.length}
           </span>
-          <span className="kpi-s">featured Arc pools beat the naive band over 365 days, two of them turning a loss into a gain</span>
+          <span className="kpi-s">
+            featured Arc pools beat the naive band over 365 days{TURNED > 0 && <>, {TURNED} turning a loss into a gain</>}
+          </span>
         </div>
       </div>
 
