@@ -21,7 +21,8 @@ export { FEATURED };
 const SCREENER_KEY = "screener:latest";
 const LOCK_KEY = "screener:lock";
 const POOLS_KEY = "pools:list";
-const MAX_POOLS = 15;
+const MAX_POOLS = 60;
+const POOL_PAGES = 3; // GeckoTerminal lists 20 pools per page; Arc has ~60 v3 pools
 const MIN_TVL_USD = 2000;
 const DETAIL_TTL_SEC = 6 * 3600;
 const RL_LIMIT = 60;
@@ -77,7 +78,7 @@ async function build(env, opts = {}) {
   // last good list in KV and fall back to it.
   let pools;
   try {
-    pools = (await listV3Pools()).filter((p) => p.tvlUsd >= MIN_TVL_USD).slice(0, MAX_POOLS);
+    pools = (await listV3Pools(POOL_PAGES)).filter((p) => p.tvlUsd >= MIN_TVL_USD).slice(0, MAX_POOLS);
     await env.IVL_ARC_KV.put(POOLS_KEY, JSON.stringify(pools));
   } catch (e) {
     pools = (await env.IVL_ARC_KV.get(POOLS_KEY, "json")) ?? [];

@@ -2,9 +2,9 @@
 //
 // Every Uniswap v3 swap emits Swap(sender, recipient, amount0, amount1, sqrtPriceX96, liquidity,
 // tick). Reading those logs from Arc's public RPC gives each pool's exact execution price and
-// volume, with no third-party indexer in between. One eth_getLogs call covers all tracked pools for
-// up to 10,000 blocks (~85 minutes on Arc), so the 30-minute cron only needs one call; the initial
-// backfill runs once from scripts/seed.mjs.
+// volume, with no third-party indexer in between. One eth_getLogs call covers up to 20 tracked pools
+// for up to 10,000 blocks (~85 minutes on Arc), so the 30-minute cron needs one call per 20 pools;
+// the initial backfill runs once from scripts/seed.mjs.
 //
 // State is a single KV value: { block, pools: { [address]: { meta, c15, c4h } } } where c15 keeps
 // ~8 days of 15-minute candles and c4h the pool's whole life on 4-hour candles, both as
@@ -15,6 +15,7 @@ export const ARC_RPCS = ["https://rpc.mainnet.arc.io", "https://rpc.quicknode.ma
 export const SWAP_TOPIC = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67";
 export const INDEX_KEY = "arc:index";
 const MAX_RANGE = 9999; // the public RPC rejects ranges of 10,000 blocks or more
+const MAX_ADDRESSES = 20; // and filters with more than ~20 addresses ("requested range too large")
 const KEEP_15M = 8 * 96;
 const KEEP_4H = 6 * 120;
 const TF = { c15: 900e3, c4h: 14400e3 };
@@ -125,17 +126,27 @@ export async function advanceIndex(state, pools, { maxCalls = 3, fromBlock, paus
   const head = Number(BigInt(await rpc("eth_blockNumber", [])));
   state = state ?? { block: fromBlock ?? head - MAX_RANGE, pools: {} };
   for (const p of pools) {
-    if (!state.pools[p.address]) state.pools[p.address] = { meta: await readPoolMeta(p.address, p.baseToken), c15: [], c4h: [] };
+    if (state.pools[p.address]) continue;
+    // A rate-limited metadata read must not stall the index for every pool: retry on the next run.
+    try {
+      state.pools[p.address] = { meta: await readPoolMeta(p.address, p.baseToken), c15: [], c4h: [] };
+    } catch (e) {
+      console.warn(`meta ${p.address}: ${e.message ?? e}, retrying next run`);
+    }
   }
   const addresses = Object.keys(state.pools);
+  const groups = [];
+  for (let i = 0; i < addresses.length; i += MAX_ADDRESSES) groups.push(addresses.slice(i, i + MAX_ADDRESSES));
   let calls = 0;
   let span = MAX_RANGE;
   while (state.block < head && calls < maxCalls) {
     const from = state.block + 1;
     const to = Math.min(head, from + span - 1);
+    const range = { fromBlock: `0x${from.toString(16)}`, toBlock: `0x${to.toString(16)}`, topics: [SWAP_TOPIC] };
     let logs;
     try {
-      logs = await rpc("eth_getLogs", [{ fromBlock: `0x${from.toString(16)}`, toBlock: `0x${to.toString(16)}`, address: addresses, topics: [SWAP_TOPIC] }]);
+      logs = [];
+      for (const address of groups) logs.push(...(await rpc("eth_getLogs", [{ ...range, address }])));
     } catch (e) {
       // Busy stretches exceed the RPC's per-response cap: halve the range and retry.
       if (e.rpcError && span > 100) {

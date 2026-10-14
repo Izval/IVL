@@ -4,12 +4,11 @@ import { Link } from "../App";
 import { Segmented } from "../ui";
 import { SectionHead } from "./SectionHead";
 
-// The published 365-day walk-forward (README, scripts/compare.mjs), normalized units.
+// One-year replay of Arc's featured pools (public/featured snapshots, worker/src/compare.mjs), normalized units.
 const RESEARCH = [
-  { pair: "ETH / BNB", ivl: 65.71, naive: -34.36, il: -64, reb: [10, 15] },
-  { pair: "BNB / USDT", ivl: 13.99, naive: -61.13, il: -55, reb: [13, 27] },
-  { pair: "CAKE / WBNB", ivl: 8.92, naive: -68.09, il: -53, reb: [7, 27] },
-  { pair: "AAVE / WBNB", ivl: -7.45, naive: -56.77, il: -62, reb: [7, 35] },
+  { pair: "cirBTC / USDC", ivl: 144.1, naive: -32.3, il: -44, reb: [10, 18] },
+  { pair: "EURC / USDC", ivl: 65.0, naive: -31.9, il: -51, reb: [14, 27] },
+  { pair: "XAUM / USDC", ivl: -27.7, naive: -86.4, il: -61, reb: [16, 30] },
 ];
 
 export function Proof({
@@ -36,21 +35,21 @@ export function Proof({
       <div className="kpi-row" data-reveal="stagger">
         <div className="kpi">
           <span className="kpi-big mono">
-            <span data-count="53">53</span>–<span data-count="64" data-suffix="%">64%</span>
+            <span data-count="44">44</span>–<span data-count="61" data-suffix="%">61%</span>
           </span>
           <span className="kpi-s">less impermanent-loss exposure than a naive band</span>
         </div>
         <div className="kpi">
           <span className="kpi-big mono">
-            <span data-count="2">2</span>–<span data-count="5" data-suffix="×">5×</span>
+            <span data-count="2" data-suffix="×">2×</span>
           </span>
-          <span className="kpi-s">fewer rebalances: IVL waits for a new range instead of chasing price</span>
+          <span className="kpi-s">fewer rebalances (about half): IVL waits for a new range instead of chasing price</span>
         </div>
         <div className="kpi">
           <span className="kpi-big mono">
-            <span data-count="3">3</span>/4
+            <span data-count="3">3</span>/3
           </span>
-          <span className="kpi-s">pairs turn a loss into a gain over 365 days</span>
+          <span className="kpi-s">featured Arc pools beat the naive band over 365 days, two of them turning a loss into a gain</span>
         </div>
       </div>
 
@@ -62,7 +61,7 @@ export function Proof({
         {c ? (
           <CompareFigure key={featured} c={c} />
         ) : pool === "failed" || (pool && !live) ? (
-          <div className="chart-skel empty mono">The live replay is unavailable right now. The research results are below.</div>
+          <div className="chart-skel empty mono">The live replay is unavailable right now. The summary for all three pools is below.</div>
         ) : (
           <div className="chart-skel mono">replaying a year of history…</div>
         )}
@@ -75,7 +74,7 @@ export function Proof({
 
       <div className="proof-research" data-reveal>
         <div className="lab-top">
-          <h3 className="fig-h">365-day walk-forward on BNB Chain</h3>
+          <h3 className="fig-h">365-day replay on Arc's featured pools</h3>
           <span className="rs-legend mono">
             <span>
               <i className="lgd ivl" /> IVL net

@@ -27,10 +27,12 @@ export function SourceTag({ p }: { p: PoolAnalysis }) {
 
 type Filter = "all" | "concentrate" | "hold" | "withdraw_or_widen";
 type Sort = "score" | "tvl" | "apr";
+const PAGE_SIZE = 15;
 
 export function ScreenerTable({ data }: { data: ScreenerData }) {
   const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<Sort>("score");
+  const [sort, setSort] = useState<Sort>("tvl");
+  const [page, setPage] = useState(0);
   const [q, setQ] = useState("");
   const list = useRef<HTMLDivElement>(null);
   const layout = useRef<ReturnType<typeof createLayout> | null>(null);
@@ -47,6 +49,11 @@ export function ScreenerTable({ data }: { data: ScreenerData }) {
       .filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.pool.includes(needle))
       .sort((a, b) => key[sort](b) - key[sort](a));
   }, [scored, filter, sort, q]);
+
+  // Any change to the filter, sort or search starts again from the first page.
+  useLayoutEffect(() => setPage(0), [filter, sort, q]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const shown = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Rows glide to their new places when the filter or sort changes (anime's layout engine).
   const change = (fn: () => void) => {
@@ -85,8 +92,8 @@ export function ScreenerTable({ data }: { data: ScreenerData }) {
           <label className="select">
             <span>Sort</span>
             <select value={sort} onChange={(e) => change(() => setSort(e.target.value as Sort))}>
-              <option value="score">IVL score</option>
               <option value="tvl">TVL</option>
+              <option value="score">IVL score</option>
               <option value="apr">Fee APR</option>
             </select>
           </label>
@@ -104,7 +111,7 @@ export function ScreenerTable({ data }: { data: ScreenerData }) {
         <span />
       </div>
       <div className="scr-list" ref={list}>
-        {rows.map((p) => (
+        {shown.map((p) => (
           <div key={p.pool} className="row row-grid" onClick={() => navigate(`/pool/${p.pool}`)}>
             <span className="row-pool">
               <Link to={`/pool/${p.pool}`} className="pool-link">
@@ -133,6 +140,19 @@ export function ScreenerTable({ data }: { data: ScreenerData }) {
         ))}
         {!rows.length && <p className="scr-empty">No pools match.</p>}
       </div>
+      {pages > 1 && (
+        <nav className="scr-pager" aria-label="Pool list pages">
+          <button className="btn ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>
+            <span aria-hidden>←</span> Prev
+          </button>
+          <span className="mono">
+            {page * PAGE_SIZE + 1}–{Math.min(rows.length, (page + 1) * PAGE_SIZE)} of {rows.length}
+          </span>
+          <button className="btn ghost" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
+            Next <span aria-hidden>→</span>
+          </button>
+        </nav>
+      )}
       <p className="scr-note">
         {data.updatedAt && <>Updated {new Date(data.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · </>}
         7-day window{pending > 0 && <> · {pending} more pools being scored</>} · Fee APR is pool-wide (24h volume × fee ÷ TVL) ·

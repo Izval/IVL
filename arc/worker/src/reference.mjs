@@ -57,8 +57,23 @@ const STEP_MS = { "15m": 900e3, "1h": 3600e3, "4h": 14400e3, "1d": 864e5 };
 let proxy = null;
 export const setReferenceProxy = (url) => void (proxy = url);
 
+// Several pools share a reference (EURC and cirBTC trade in more than one fee tier): one cron run
+// fetches each market once instead of once per pool, which keeps the run under the subrequest cap.
+const MEMO_MS = 10 * 60e3;
+const memo = new Map();
+
 /** Oldest-first candles for a reference id, paging back past MEXC's 500-candle limit. */
-export async function getReferenceCandles(ref, scale, limit) {
+export function getReferenceCandles(ref, scale, limit) {
+  const key = `${ref}/${scale}/${limit}`;
+  const hit = memo.get(key);
+  if (hit && Date.now() - hit.at < MEMO_MS) return hit.p;
+  const p = fetchReferenceCandles(ref, scale, limit);
+  memo.set(key, { at: Date.now(), p });
+  p.catch(() => memo.delete(key));
+  return p;
+}
+
+async function fetchReferenceCandles(ref, scale, limit) {
   if (proxy) {
     const res = await fetch(`${proxy}?id=${encodeURIComponent(ref)}&scale=${scale}&limit=${limit}`, { signal: AbortSignal.timeout(20000) });
     if (!res.ok) throw new Error(`reference ${ref} ${scale} -> HTTP ${res.status}`);

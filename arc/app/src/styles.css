@@ -589,6 +589,9 @@ sub, sup { font-size: 0.62em; }
 .scr-empty, .scr-note { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-3); }
 .scr-empty { padding: 24px 0; }
 .scr-note { margin-top: 16px; line-height: 1.65; max-width: 62rem; }
+.scr-pager { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 14px; font-size: 0.78rem; color: var(--ink-3); }
+.scr-pager .btn { height: 34px; padding: 0 14px; font-size: 0.8rem; }
+.btn.ghost:disabled:hover { background: transparent; border-color: var(--line); }
 .skeleton { display: block; height: 12px; background: repeating-linear-gradient(90deg, var(--line-2) 0 2px, transparent 2px 6px); opacity: 0.6; animation: skel 1.4s ease-in-out infinite; }
 @keyframes skel { 50% { opacity: 0.25; } }
 .skel-row { cursor: default; }

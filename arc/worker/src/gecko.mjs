@@ -47,10 +47,26 @@ function toPool(p) {
   };
 }
 
-/** Top Uniswap v3 pools on Arc, sorted by 24h volume. */
-export async function listV3Pools(page = 1) {
-  const d = await gecko(`/networks/${NETWORK}/dexes/${V3_DEX}/pools?page=${page}&sort=h24_volume_usd_desc`);
-  return (d.data ?? []).map(toPool);
+/**
+ * Top Uniswap v3 pools on Arc, sorted by 24h volume. GeckoTerminal returns 20 per page; a later
+ * page that fails (rate limit) keeps the pages already read rather than losing the whole list.
+ */
+export async function listV3Pools(pages = 1) {
+  const out = [];
+  for (let page = 1; page <= pages; page++) {
+    let d;
+    try {
+      d = await gecko(`/networks/${NETWORK}/dexes/${V3_DEX}/pools?page=${page}&sort=h24_volume_usd_desc`);
+    } catch (e) {
+      if (page === 1) throw e;
+      console.warn(`pool list page ${page}: ${e.message ?? e}`);
+      break;
+    }
+    const rows = (d.data ?? []).map(toPool);
+    out.push(...rows);
+    if (rows.length < 20) break;
+  }
+  return out;
 }
 
 /** Metadata for one pool (any DEX on Arc). */
