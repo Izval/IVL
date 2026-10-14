@@ -17,6 +17,7 @@ import { Ruler } from "./diagram/Ruler";
 const BASIS: Record<string, string> = {
   vwap_2sigma: "VWAP ± 2σ",
   vwap_2_5_atr14: "VWAP ± 2.5 ATR (widened)",
+  vwap_2_5_atr14_4h: "VWAP ± 2.5 ATR on 4h, at least the channel (widened)",
   observed_range: "observed channel",
 };
 const CLASS: Record<string, string> = {

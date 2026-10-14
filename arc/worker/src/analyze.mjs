@@ -4,7 +4,7 @@
 // Arc-specific is the data: the pool's own candles (gecko.mjs) or, when the pool's asset has a deep
 // reference market, that market's candles adjusted to the pool's price and liquidity (reference.mjs).
 
-import { computeIVL, horizonLookbacks } from "../../../scripts/ivl-core.mjs";
+import { atr, computeIVL, horizonLookbacks } from "../../../scripts/ivl-core.mjs";
 import { decideLP } from "../../../scripts/ivl-strategy.mjs";
 import { aggregate, getPoolCandles, getPoolMultiScale } from "./gecko.mjs";
 import { adjustCandles, adjustRolling, deltaFor, getReferenceCandles, liquidityFactor, MARKETS, referenceFor, vwap } from "./reference.mjs";
@@ -57,8 +57,18 @@ export function analyzeCandles(pool, candlesByScale, price) {
 
   const decision = decideLP(ivl, { candlesPrimary: primary });
   // decideLP's "hold" band reuses the observed channel; normalize every action to {lower, upper}.
-  const lower = decision.lpRange.lower ?? ivl.range.low;
-  const upper = decision.lpRange.upper ?? decision.lpRange.high ?? ivl.range.high;
+  let lower = decision.lpRange.lower ?? ivl.range.low;
+  let upper = decision.lpRange.upper ?? decision.lpRange.high ?? ivl.range.high;
+  if (decision.action === "withdraw_or_widen") {
+    // The engine widens to VWAP ± 2.5·ATR14 of the primary scale. On Arc that scale is 15m, so the
+    // ATR is one quarter-hour's range and the "wide" band came out narrower than the 7-day channel.
+    // An LP band has to hold for days: take ATR14 on 4h candles, and never go inside the channel.
+    const a4h = atr(candlesByScale["4h"] ?? [], 14);
+    const mid = ivl.lpRange.vwap;
+    lower = Math.min(ivl.range.low, mid - 2.5 * a4h);
+    upper = Math.max(ivl.range.high, mid + 2.5 * a4h);
+    decision.lpRange.basis = "vwap_2_5_atr14_4h";
+  }
 
   return {
     ...base,
