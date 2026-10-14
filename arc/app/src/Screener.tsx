@@ -6,25 +6,6 @@ import { ActionTag, fmtPct, fmtUsd, Segmented } from "./ui";
 import { Ruler } from "./diagram/Ruler";
 import { EASE, reducedMotion } from "./motion";
 
-const REF_LABEL: Record<string, string> = {
-  EURUSDC: "EUR/USD",
-  BTCUSDC: "BTC/USD",
-  ETHUSDC: "ETH/USD",
-  PAXGUSDT: "Gold",
-};
-
-export function SourceTag({ p }: { p: PoolAnalysis }) {
-  if (p.source?.kind === "reference") {
-    const label = p.source.market ?? REF_LABEL[p.source.symbol!] ?? p.source.symbol;
-    return (
-      <span className="src" title={`Scored on ${label} history, re-anchored to this pool, liquidity factor ×${p.source.liquidityFactor}`}>
-        {label} <span className="src-x">×{p.source.liquidityFactor?.toFixed(2)}</span>
-      </span>
-    );
-  }
-  return <span className="src dim">Arc pool trades</span>;
-}
-
 type Filter = "all" | "concentrate" | "hold" | "withdraw_or_widen";
 type Sort = "score" | "tvl" | "apr";
 const PAGE_SIZE = 15;
@@ -104,7 +85,6 @@ export function ScreenerTable({ data }: { data: ScreenerData }) {
         <span>Pool</span>
         <span>IVL</span>
         <span>Signal</span>
-        <span className="hide-md">Scored on</span>
         <span className="num hide-sm">LVR</span>
         <span className="num hide-sm">TVL</span>
         <span className="num">Fee APR</span>
@@ -124,9 +104,6 @@ export function ScreenerTable({ data }: { data: ScreenerData }) {
             </span>
             <span>
               <ActionTag action={p.action!} short />
-            </span>
-            <span className="hide-md">
-              <SourceTag p={p} />
             </span>
             <span className={`num hide-sm lvr lvr-${p.lvr?.level}`}>{p.lvr?.level ?? "–"}</span>
             <span className="num hide-sm mono">{fmtUsd(p.tvlUsd)}</span>
@@ -172,7 +149,6 @@ export function ScreenerSkeleton() {
             <span className="skeleton" style={{ width: "60%" }} />
             <span className="skeleton" />
             <span className="skeleton" style={{ width: 80 }} />
-            <span className="skeleton hide-md" style={{ width: 90 }} />
             <span className="skeleton hide-sm" />
             <span className="skeleton hide-sm" />
             <span className="skeleton" />
