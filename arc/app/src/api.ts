@@ -85,7 +85,9 @@ export const fetchScreener = () => get<Screener>("/v1/arc/pools");
  * Public data APIs rate-limit shared cloud egress hard, so this keeps "paste any pool" working.
  */
 const CACHE_MS = 6 * 3600e3;
-const cacheKey = (a: string) => `ivl:pool:${a}`;
+// Bump when the analysis changes, so visitors don't keep a result computed by older code.
+const ANALYSIS_VERSION = 2;
+const cacheKey = (a: string) => `ivl:pool:v${ANALYSIS_VERSION}:${a}`;
 function cached(address: string): PoolAnalysis | null {
   try {
     const hit = JSON.parse(localStorage.getItem(cacheKey(address)) ?? "null");

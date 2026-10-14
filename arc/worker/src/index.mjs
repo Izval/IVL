@@ -25,6 +25,7 @@ const MAX_POOLS = 60;
 const POOL_PAGES = 3; // GeckoTerminal lists 20 pools per page; Arc has ~60 v3 pools
 const MIN_TVL_USD = 2000;
 const DETAIL_TTL_SEC = 6 * 3600;
+const ON_DEMAND_TTL_SEC = 30 * 60; // detail of a non-featured pool, computed when someone opens it
 const RL_LIMIT = 60;
 const RL_WINDOW_SEC = 60;
 const ADDR_RE = /^0x[0-9a-f]{40}$/;
@@ -117,17 +118,20 @@ async function build(env, opts = {}) {
   return out;
 }
 
-/** Full detail (price series + one-year replay) for a featured pool, from the stored Arc index. */
-async function refreshDetail(env, address, pools, index) {
+/** Full detail (price series + with/without replay) for one pool, from the stored Arc index. */
+async function refreshDetail(env, address, pools, index, ttl = DETAIL_TTL_SEC) {
   pools ??= (await env.IVL_ARC_KV.get(POOLS_KEY, "json")) ?? [];
   index ??= await env.IVL_ARC_KV.get(INDEX_KEY, "json");
   const meta = pools.find((p) => p.address === address);
   const indexed = index && indexedCandles(index, address);
-  if (!meta || !indexed) return;
+  if (!meta || !indexed) return null;
   try {
-    await storeDetail(env, address, await analyzePool(withIndexedVolume(meta, indexed), { detail: true, indexed }));
+    const r = { ...(await analyzePool(withIndexedVolume(meta, indexed), { detail: true, indexed })), updatedAt: new Date().toISOString() };
+    await env.IVL_ARC_KV.put(`detail:${address}`, JSON.stringify(r), { expirationTtl: ttl });
+    return r;
   } catch (e) {
     console.warn(`detail: ${meta.name} ${e.message ?? e}`);
+    return null;
   }
 }
 
@@ -138,18 +142,16 @@ function withIndexedVolume(pool, indexed) {
   return { ...pool, volume24hUsd: quoteVol * usd };
 }
 
-const storeDetail = (env, address, r) =>
-  env.IVL_ARC_KV.put(`detail:${address}`, JSON.stringify({ ...r, updatedAt: new Date().toISOString() }), {
-    expirationTtl: DETAIL_TTL_SEC,
-  });
-
 /**
- * Cached detail only. Public data APIs rate-limit shared cloud egress, so pools that are not
- * precomputed are analyzed by the app in the visitor's browser (same engine, same modules).
+ * Detail for a pool. Any pool in the Arc index is computed here from its own Arc candles (the
+ * exact last 7 days) and cached briefly; only addresses outside the index are left to the app,
+ * which analyzes them in the visitor's browser (same engine, same modules).
  */
 async function poolDetail(env, address) {
   const cached = await env.IVL_ARC_KV.get(`detail:${address}`, "json");
   if (cached) return cached;
+  const fresh = await refreshDetail(env, address, null, null, ON_DEMAND_TTL_SEC);
+  if (fresh) return fresh;
   const row = (await env.IVL_ARC_KV.get(SCREENER_KEY, "json"))?.pools?.find((p) => p.pool === address);
   if (row?.ok) return { ...row, partial: true };
   return { pool: address, ok: false, reason: "not_cached" };
