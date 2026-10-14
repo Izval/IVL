@@ -20,3 +20,8 @@ agent/**/.env.local
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# --- arc/ (IVL on Arc app + worker) ---
+arc/app/dist/
+arc/**/.wrangler/
+arc/app/.archive/
