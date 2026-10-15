@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bandToTicks,
+  mintMinimums,
   pairAmounts,
   priceToSqrtPriceX96,
   priceToTick,
@@ -63,5 +64,36 @@ describe("fee and units", () => {
   it("toUnits rounds down", () => {
     expect(toUnits(1.23456789, 6)).toBe(1234567n);
     expect(toUnits(0, 6)).toBe(0n);
+  });
+});
+
+describe("mint minimums (price slippage)", () => {
+  // EURC/USDC-like narrow band: USDC token0 (6), EURC token1 (6), ticks -1240..-950, price 0.8944.
+  const pos = { tickLower: -1240, tickUpper: -950 };
+  const p0 = 1 / 1.11811;
+  const amounts = pairAmounts({ price: p0, ...pos, dec0: 6, dec1: 6 }, { side: 0, amount: 0.6 });
+  const desired = { amount0: toUnits(amounts.amount0, 6), amount1: toUnits(amounts.amount1, 6) };
+  const L = (sp: number) => {
+    const sa = Math.sqrt(1.0001 ** pos.tickLower);
+    const sb = Math.sqrt(1.0001 ** pos.tickUpper);
+    const l = Math.min((Number(desired.amount0) * sp * sb) / (sb - sp), Number(desired.amount1) / (sp - sa));
+    return { a0: (l * (sb - sp)) / (sp * sb), a1: l * (sp - sa) };
+  };
+  for (const move of [-0.004, -0.001, 0, 0.001, 0.004]) {
+    it(`a ${move * 100}% price move since the quote still mints`, () => {
+      const p = p0 * (1 + move);
+      const sqrtPriceX96 = priceToSqrtPriceX96(p, 6, 6);
+      const m = mintMinimums({ sqrtPriceX96, ...pos }, desired, 50);
+      const used = L(Number(sqrtPriceX96) / 2 ** 96);
+      expect(Number(m.amount0Min)).toBeLessThanOrEqual(used.a0);
+      expect(Number(m.amount1Min)).toBeLessThanOrEqual(used.a1);
+      expect(m.amount0Min + m.amount1Min).toBeGreaterThan(0n);
+    });
+  }
+  it("the old amount-based minimum would have reverted on a 0.1% move", () => {
+    const used = L(Number(priceToSqrtPriceX96(p0 * 1.001, 6, 6)) / 2 ** 96);
+    const oldMin0 = Number(desired.amount0) * 0.995;
+    const oldMin1 = Number(desired.amount1) * 0.995;
+    expect(used.a0 < oldMin0 || used.a1 < oldMin1).toBe(true);
   });
 });

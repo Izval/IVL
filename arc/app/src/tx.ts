@@ -12,7 +12,7 @@ import {
   type WalletClient,
 } from "viem";
 import { arc, TREASURY, UNISWAP_V3, USDC, USDC_DECIMALS } from "./chain";
-import { toUnits, withSlippage } from "./math";
+import { mintMinimums, toUnits, withSlippage } from "./math";
 
 export const erc20Abi = parseAbi([
   "function symbol() view returns (string)",
@@ -79,6 +79,8 @@ export type PositionPlan = {
   amount1: number;
   /** Set when the pool does not exist yet: it is created and initialized at this price. */
   initSqrtPriceX96?: bigint;
+  /** The pool's price read right before the mint; the slippage minimums are taken around it. */
+  sqrtPriceX96?: bigint;
   slippageBps: number;
   feeUsdc: number;
 };
@@ -87,6 +89,10 @@ export type PositionPlan = {
 export function buildMintCall(plan: PositionPlan, recipient: Address): Call {
   const a0 = toUnits(plan.amount0, plan.token0.decimals);
   const a1 = toUnits(plan.amount1, plan.token1.decimals);
+  const sqrtPriceX96 = plan.initSqrtPriceX96 ?? plan.sqrtPriceX96;
+  const mins = sqrtPriceX96
+    ? mintMinimums({ sqrtPriceX96, tickLower: plan.tickLower, tickUpper: plan.tickUpper }, { amount0: a0, amount1: a1 }, plan.slippageBps)
+    : { amount0Min: withSlippage(a0, plan.slippageBps), amount1Min: withSlippage(a1, plan.slippageBps) };
   const inner: Hex[] = [];
   if (plan.initSqrtPriceX96) {
     inner.push(
@@ -110,8 +116,8 @@ export function buildMintCall(plan: PositionPlan, recipient: Address): Call {
           tickUpper: plan.tickUpper,
           amount0Desired: a0,
           amount1Desired: a1,
-          amount0Min: withSlippage(a0, plan.slippageBps),
-          amount1Min: withSlippage(a1, plan.slippageBps),
+          amount0Min: mins.amount0Min,
+          amount1Min: mins.amount1Min,
           recipient,
           deadline: BigInt(Math.floor(Date.now() / 1000) + 20 * 60),
         },
@@ -190,6 +196,11 @@ export async function executePlan(
   onStep: (steps: Step[]) => void
 ): Promise<{ hashes: Hex[]; tokenId?: bigint }> {
   const owner = wallet.account!.address;
+  if (!plan.initSqrtPriceX96) {
+    // Fresh price for the slippage minimums: the page's price may be minutes old.
+    const pool = await findPool(client, plan.token0.address, plan.token1.address, plan.fee);
+    if (pool) plan = { ...plan, sqrtPriceX96: pool.sqrtPriceX96 };
+  }
   const approvals = await buildApprovals(client, plan, owner);
   const feeCall = buildFeeCall(plan.feeUsdc);
   const mint = buildMintCall(plan, owner);

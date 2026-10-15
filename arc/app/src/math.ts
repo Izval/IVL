@@ -90,6 +90,43 @@ export function toUnits(amount: number, decimals: number): bigint {
 
 export const withSlippage = (x: bigint, bps: number) => (x * BigInt(10_000 - bps)) / 10_000n;
 
+/**
+ * amount0Min / amount1Min for NonfungiblePositionManager.mint, the way Uniswap's SDK does it:
+ * slippage applies to the price, not to the amounts. In a narrow band a tiny price move changes
+ * the token ratio a lot, so "amount − 0.5%" reverts with "Price slippage check". Here the
+ * liquidity the pool will actually take at the current price is fixed, and each minimum is that
+ * liquidity's amount at the price slipped against it (token0 at price·(1+s), token1 at price·(1−s)).
+ */
+export function mintMinimums(
+  pos: { sqrtPriceX96: bigint; tickLower: number; tickUpper: number },
+  desired: { amount0: bigint; amount1: bigint },
+  slippageBps: number
+): { amount0Min: bigint; amount1Min: bigint } {
+  const sp = Number(pos.sqrtPriceX96) / 2 ** 96;
+  const sa = Math.sqrt(1.0001 ** pos.tickLower);
+  const sb = Math.sqrt(1.0001 ** pos.tickUpper);
+  const a0 = Number(desired.amount0);
+  const a1 = Number(desired.amount1);
+  // Liquidity the NPM computes from the desired amounts (LiquidityAmounts.getLiquidityForAmounts).
+  let L: number;
+  if (sp <= sa) L = (a0 * sa * sb) / (sb - sa);
+  else if (sp >= sb) L = a1 / (sb - sa);
+  else L = Math.min((a0 * sp * sb) / (sb - sp), a1 / (sp - sa));
+  const clamp = (x: number) => Math.min(Math.max(x, sa), sb);
+  const amount0At = (x: number) => (L * (sb - clamp(x))) / (clamp(x) * sb);
+  const amount1At = (x: number) => L * (clamp(x) - sa);
+  const s = slippageBps / 10_000;
+  // A hair under, so float rounding never asks for more than the pool's integer math gives.
+  const floor = (x: number, cap: bigint) => {
+    const v = BigInt(Math.max(0, Math.floor(x * 0.9999)));
+    return v < cap ? v : cap;
+  };
+  return {
+    amount0Min: floor(amount0At(sp * Math.sqrt(1 + s)), desired.amount0),
+    amount1Min: floor(amount1At(sp * Math.sqrt(1 - s)), desired.amount1),
+  };
+}
+
 /** Service fee in USDC for a deposit worth `valueUsd`. */
 export function serviceFee(valueUsd: number): number {
   if (!(valueUsd > 0)) return MIN_FEE_USDC;
