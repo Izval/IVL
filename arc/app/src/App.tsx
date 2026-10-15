@@ -98,7 +98,16 @@ export function App() {
             </a>
           </nav>
           <div className="top-right">
-            <span className="chain mono hide-sm" title="Arc mainnet, chain 5042">
+            <span
+              className="chain mono hide-sm"
+              title={
+                screener?.indexedBlock
+                  ? `Arc mainnet (chain 5042). Pool data indexed from Arc up to block #${screener.indexedBlock.toLocaleString("en-US")}${
+                      screener.updatedAt ? `, ${new Date(screener.updatedAt).toLocaleString("en-US", { timeStyle: "short", dateStyle: "medium" })}` : ""
+                    }; refreshed every 30 minutes.`
+                  : "Arc mainnet, chain 5042"
+              }
+            >
               <span className="live" />
               Arc{screener?.indexedBlock ? ` #${screener.indexedBlock.toLocaleString("en-US")}` : " · 5042"}
             </span>
